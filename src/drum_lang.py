@@ -1,83 +1,110 @@
 from typing import List, Union
-from dataclasses import dataclass
-from typing import Dict
+from drum_synth import DrumSynth
+from primitives import (
+    Beat,
+    DrumSound,
+    NoteLength,
+    OccludedTrack,
+    Occlusion,
+    PlayableTrack,
+)
 
-from drum_kit import DrumSound, note_lengths, drum_sounds, DrumKit
-from notes import NoteLength
-from drum_synth import DrumHit, DrumSynth
 
-
-def parse_drum_sequence(sequence: str) -> List[Union[DrumHit, List[DrumHit]]]:
+def parse_primitives_from_drum_lang(
+    sequence: str,
+) -> OccludedTrack:
+    """Different from parse_track_from_drum_lang in that it returns a list of primitives.
+    This supports ? occlusions.
     """
-    Parses a drum sequence string, returning a list of either:
-    - Single drum hits (DrumHit)
-    - Groups of simultaneous drum hits as lists of DrumHit
+    primitives: List[Union[DrumSound, NoteLength, Occlusion]] = []
 
-    Args:
-        sequence: A string representing the drum sequence (e.g., "KSH5C2")
+    i = 0
+    while i < len(sequence):
+        if sequence[i] == "?":
+            primitives.append(Occlusion())
+        elif NoteLength.from_drum_lang_code(sequence[i]):
+            primitives.append(NoteLength.from_drum_lang_code(sequence[i]))
+        elif DrumSound.from_drum_lang_code(sequence[i]):
+            primitives.append(DrumSound.from_drum_lang_code(sequence[i]))
+        else:
+            raise ValueError(f"Invalid drum lang code: {sequence[i]}")
+        i += 1
 
-    Returns:
-        List of DrumHit objects or lists of simultaneous DrumHit objects
+    return primitives
 
-    Raises:
-        ValueError: If the sequence is empty or contains invalid codes
-    """
+
+def primitives_to_track(
+    primitives: List[Union[DrumSound, NoteLength, Occlusion]],
+    bpm: int = 120,
+) -> PlayableTrack:
+    # Check for occlusions
+    if any(isinstance(p, Occlusion) for p in primitives):
+        raise ValueError("Occlusions not supported in primitives_to_track")
+
+    beats: List[Beat] = []
+    hits: List[DrumSound] = []
+
+    for primitive in primitives:
+        if isinstance(primitive, DrumSound):
+            hits.append(primitive)
+        elif isinstance(primitive, NoteLength):
+            if not hits:
+                raise ValueError("No hits to create a beat")
+            elif len(hits) > 4:
+                raise ValueError("Too many hits to create a beat (max 4)")
+            beats.append(Beat(hits=hits, length=primitive))
+            hits = []
+
+    return PlayableTrack(beats=beats, bpm=bpm)
+
+
+def parse_track_from_drum_lang(sequence: str) -> PlayableTrack:
+    """Parse a drum language sequence into a playable track."""
+    if "?" in sequence:
+        raise ValueError("Occlusions not supported in parse_track_from_drum_lang")
+
     if not sequence or not sequence.strip():
-        return []
+        return PlayableTrack(beats=[])
 
     sequence = sequence.strip().replace(" ", "")
-    parsed_sequence = []
+    beats: List[Beat] = []
     i = 0
 
     while i < len(sequence):
-        simultaneous_hits = []
+        simultaneous_hits: List[DrumSound] = []
 
-        # Look for drum sounds based on their codes
-        while i < len(sequence) and DrumKit.DRUM_LANG_SOUND_MAP.get(sequence[i]):
-            drum_sound = DrumKit.DRUM_LANG_SOUND_MAP.get(sequence[i])
-            simultaneous_hits.append(drum_sound)
-            i += 1
+        while i < len(sequence):
+            drum_sound = DrumSound.from_drum_lang_code(sequence[i])
+            if not simultaneous_hits and drum_sound is None:
+                raise ValueError(f"Invalid or missing drum sound")
+            elif drum_sound is None:
+                break
+            else:
+                simultaneous_hits.append(drum_sound)
+                i += 1
 
         # Check for note length
-        if i < len(sequence) and DrumKit.DRUM_LANG_NOTE_LENGTHS.get(sequence[i]):
-            note_length = DrumKit.get_drum_lang_note_length(sequence[i])
+        if i < len(sequence) and NoteLength.from_drum_lang_code(sequence[i]):
+            note_length = NoteLength.from_drum_lang_code(sequence[i])
             i += 1
+        elif isinstance(simultaneous_hits[-1], Occlusion):
+            pass
         else:
-            note_length = note_lengths["quarter"]
+            raise ValueError(f"Invalid or missing note length")
 
-        if not simultaneous_hits:
-            continue
-
-        # Create DrumHit objects
-        if len(simultaneous_hits) > 1:
-            # Multiple simultaneous hits as a list
-            parsed_sequence.append(
-                [
-                    DrumHit(
-                        midi_value=drum.midi_value,
-                        note_length=note_length,
-                        velocity=127,
-                    )
-                    for drum in simultaneous_hits
-                ]
+        beats.append(
+            Beat(
+                hits=simultaneous_hits,
+                length=note_length,
             )
-        else:
-            parsed_sequence.append(
-                [
-                    DrumHit(
-                        midi_value=simultaneous_hits[0].midi_value,
-                        note_length=note_length,
-                        velocity=127,
-                    )
-                ]
-            )
-
-    return parsed_sequence
+        )
+    return PlayableTrack(beats=beats)
 
 
 if __name__ == "__main__":
-    sequence = "SH5C2"
-    parsed_sequence = parse_drum_sequence(sequence)
-    print(parsed_sequence)
+    sequence = "B2B2S2R2"  # Boom boom clap
+    track = parse_track_from_drum_lang(sequence)
+    track.bpm = 81
+    print(track.beats[-1])
     synth = DrumSynth()
-    synth.play_track(parsed_sequence)
+    synth.play_track(track)
