@@ -1,23 +1,37 @@
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import List, Union
 
 
+class PrimitiveType(Enum):
+    SOUND = auto()
+    LENGTH = auto()
+
+
 class Primitive:
+    name: str
     cost: float
+    type: PrimitiveType
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
 
-@dataclass
-class Occlusion(Primitive):
+@dataclass(frozen=True)
+class Hole:
+
+    name: str = "Hole"
     drum_lang_code: str = "?"
 
 
-@dataclass
+@dataclass(frozen=True)
 class NoteLength(Primitive):
 
     value: int
     is_dotted: bool
     drum_lang_code: str
+    type: PrimitiveType = PrimitiveType.LENGTH
 
     cost: float = 1.0
 
@@ -27,10 +41,6 @@ class NoteLength(Primitive):
         if self.is_dotted:
             val += " dotted"
         return val
-
-    @property
-    def time(self) -> float:
-        pass
 
     @classmethod
     def from_drum_lang_code(cls, code: str) -> "NoteLength":
@@ -55,7 +65,7 @@ class NoteLength(Primitive):
         )
 
     def __repr__(self):
-        return self.name
+        return f"NoteLength({self.name}, {self.drum_lang_code})"
 
 
 SIXTY_FOURTH = NoteLength(64, False, "+")
@@ -84,30 +94,26 @@ note_lengths = {
     "whole": WHOLE,
 }
 
-# Verify note drum lang codes are unique
-note_length_codes = [length.drum_lang_code for length in note_lengths.values()]
-if len(note_length_codes) != len(set(note_length_codes)):
-    duplicate_codes = [
-        code for code in note_length_codes if note_length_codes.count(code) > 1
-    ]
-    raise ValueError(f"Duplicate note length codes found: {duplicate_codes}")
 
-
-@dataclass
+@dataclass(frozen=True)
 class Rest(Primitive):
     midi_value: int = -1
     name: str = "Rest"
     drum_lang_code: str = "R"
-
+    type: PrimitiveType = PrimitiveType.SOUND
     cost: float = 1.0
 
+    def __repr__(self):
+        return f"Rest({self.drum_lang_code})"
 
-@dataclass
+
+@dataclass(frozen=True)
 class DrumSound(Primitive):
     midi_value: int
     name: str
     sample_path: Path
     drum_lang_code: str
+    type: PrimitiveType = PrimitiveType.SOUND
 
     cost: float = 1.0
 
@@ -128,6 +134,9 @@ class DrumSound(Primitive):
             print(f"No drum sound found for MIDI value: {midi_value}")
             return Rest()
         return sound
+
+    def __repr__(self):
+        return f"DrumSound({self.name}, {self.drum_lang_code})"
 
 
 SAMPLES_DIR = Path("./data/samples")
@@ -205,8 +214,10 @@ drum_sounds = {
     "rest": Rest(),
 }
 
-# Verify drum lang codes are unique
-drum_lang_codes = [sound.drum_lang_code for sound in drum_sounds.values()]
+# Verify drum lang codes are unique across all primitives
+drum_lang_codes = [sound.drum_lang_code for sound in drum_sounds.values()] + [
+    length.drum_lang_code for length in note_lengths.values()
+]
 if len(drum_lang_codes) != len(set(drum_lang_codes)):
     duplicate_codes = [
         code for code in drum_lang_codes if drum_lang_codes.count(code) > 1
@@ -236,7 +247,7 @@ class Beat:
 
 
 FlatTrack = List[Union[DrumSound, NoteLength]]
-OccludedTrack = List[Union[DrumSound, NoteLength, Occlusion]]
+InfillTrack = List[Union[DrumSound, NoteLength, Hole]]
 
 
 @dataclass
@@ -257,3 +268,9 @@ class PlayableTrack:
 
     def from_slice(self, start: int, end: int) -> "PlayableTrack":
         return PlayableTrack(self.beats[start:end], self.bpm)
+
+
+drum_lang_primitives = [
+    *drum_sounds.values(),
+    *note_lengths.values(),
+]

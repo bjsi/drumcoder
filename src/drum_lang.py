@@ -3,25 +3,25 @@ from drum_synth import DrumSynth
 from primitives import (
     Beat,
     DrumSound,
+    InfillTrack,
     NoteLength,
-    OccludedTrack,
-    Occlusion,
+    Hole,
     PlayableTrack,
 )
 
 
 def parse_primitives_from_drum_lang(
     sequence: str,
-) -> OccludedTrack:
+) -> InfillTrack:
     """Different from parse_track_from_drum_lang in that it returns a list of primitives.
     This supports ? occlusions.
     """
-    primitives: List[Union[DrumSound, NoteLength, Occlusion]] = []
+    primitives: List[Union[DrumSound, NoteLength, Hole]] = []
 
     i = 0
     while i < len(sequence):
         if sequence[i] == "?":
-            primitives.append(Occlusion())
+            primitives.append(Hole())
         elif NoteLength.from_drum_lang_code(sequence[i]):
             primitives.append(NoteLength.from_drum_lang_code(sequence[i]))
         elif DrumSound.from_drum_lang_code(sequence[i]):
@@ -34,11 +34,11 @@ def parse_primitives_from_drum_lang(
 
 
 def primitives_to_track(
-    primitives: List[Union[DrumSound, NoteLength, Occlusion]],
+    primitives: List[Union[DrumSound, NoteLength, Hole]],
     bpm: int = 120,
 ) -> PlayableTrack:
     # Check for occlusions
-    if any(isinstance(p, Occlusion) for p in primitives):
+    if any(isinstance(p, Hole) for p in primitives):
         raise ValueError("Occlusions not supported in primitives_to_track")
 
     beats: List[Beat] = []
@@ -87,7 +87,7 @@ def parse_track_from_drum_lang(sequence: str) -> PlayableTrack:
         if i < len(sequence) and NoteLength.from_drum_lang_code(sequence[i]):
             note_length = NoteLength.from_drum_lang_code(sequence[i])
             i += 1
-        elif isinstance(simultaneous_hits[-1], Occlusion):
+        elif isinstance(simultaneous_hits[-1], Hole):
             pass
         else:
             raise ValueError(f"Invalid or missing note length")

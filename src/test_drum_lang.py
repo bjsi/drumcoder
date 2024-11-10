@@ -5,7 +5,7 @@ from primitives import (
     DOTTED_SIXTEENTH,
     QUARTER,
     NoteLength,
-    Occlusion,
+    Hole,
     PlayableTrack,
     DrumSound,
 )
@@ -62,13 +62,13 @@ class TestDrumLang(unittest.TestCase):
         primitives = parse_primitives_from_drum_lang("S2?2")
         self.assertEqual(primitives[0], DrumSound.from_drum_lang_code("S"))
         self.assertEqual(primitives[1], NoteLength.from_drum_lang_code("2"))
-        self.assertEqual(primitives[2], Occlusion())
+        self.assertEqual(primitives[2], Hole())
         self.assertEqual(primitives[3], NoteLength.from_drum_lang_code("2"))
 
         primitives = parse_primitives_from_drum_lang("S2?2S2?2")
         self.assertEqual(primitives[0], DrumSound.from_drum_lang_code("S"))
         self.assertEqual(primitives[1], NoteLength.from_drum_lang_code("2"))
-        self.assertEqual(primitives[2], Occlusion())
+        self.assertEqual(primitives[2], Hole())
         self.assertEqual(primitives[3], NoteLength.from_drum_lang_code("2"))
         self.assertEqual(primitives[4], DrumSound.from_drum_lang_code("S"))
         self.assertEqual(primitives[5], NoteLength.from_drum_lang_code("2"))
